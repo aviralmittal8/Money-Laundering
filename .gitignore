@@ -1,0 +1,22 @@
+# Large raw dataset
+HI-Small_Trans.csv
+
+# Large intermediate datasets
+datasets/
+
+# Model checkpoints and run artifacts
+models/*.pt
+models/*.pkl
+models/run_*/
+
+# Large output artifacts (keep small summary files, drop per-run dirs and large arrays)
+outputs/run_*/
+outputs/*.npy
+
+# Python cache
+__pycache__/
+*.pyc
+
+# OS/editor cruft
+.DS_Store
+Thumbs.db

@@ -1,0 +1,19 @@
+{
+  "numeric_features": [
+    "amount_received",
+    "amount_paid",
+    "amount_diff",
+    "amount_ratio",
+    "hour",
+    "day_of_week"
+  ],
+  "categorical_features": [
+    "receiving_currency",
+    "payment_currency",
+    "payment_format",
+    "from_bank",
+    "to_bank"
+  ],
+  "ann_input_dim": 134,
+  "hash_dim": 128
+}
