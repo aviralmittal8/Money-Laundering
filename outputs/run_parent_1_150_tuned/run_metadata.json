@@ -1,0 +1,10 @@
+{
+  "train_data_path": "datasets/HI-Small_Trans_train_ratio_1_10_augmented.csv",
+  "eval_data_path": "datasets/HI-Small_Trans_parent_1_150.csv",
+  "target_recall": null,
+  "min_precision": 0.08,
+  "train_rows": 113894,
+  "eval_rows": 781727,
+  "train_positives": 10354,
+  "eval_positives": 5177
+}

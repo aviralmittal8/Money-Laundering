@@ -4,13 +4,17 @@ HI-Small_Trans.csv
 # Large intermediate datasets
 datasets/
 
-# Model checkpoints and run artifacts
+# Model checkpoints and run artifacts (top-level, superseded by run_*/ dirs)
 models/*.pt
 models/*.pkl
-models/run_*/
 
-# Large output artifacts (keep small summary files, drop per-run dirs and large arrays)
+# Exploratory run dirs, excluded except the one app.py actually uses as its default view
+models/run_*/
+!models/run_parent_1_150_tuned/
 outputs/run_*/
+!outputs/run_parent_1_150_tuned/
+
+# Large arrays sitting directly in outputs/ (superseded by run_*/ dirs)
 outputs/*.npy
 
 # Python cache

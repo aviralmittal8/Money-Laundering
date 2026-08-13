@@ -27,12 +27,14 @@ src/
   predict.py                batch prediction pipeline
   evaluate.py                 metric calculation
   plots.py                     ROC/PR/confusion matrix plot generation
-models/               trained model artifacts (large files ignored, see below)
+models/               trained model artifacts
+  run_parent_1_150_tuned/  the tuned run app.py uses as its default view (included)
 outputs/              metrics, plots, threshold files
+  run_parent_1_150_tuned/  metrics/plots for the tuned run (included)
 datasets/             rebalanced training/evaluation datasets (ignored, see below)
 ```
 
-> Note: `HI-Small_Trans.csv` (the original ~454MB dataset), `datasets/`, large model checkpoints (`models/*.pt`, `models/*.pkl`, `models/run_*`), and per-run outputs (`outputs/run_*`, `.npy` files) are excluded from this repo via `.gitignore` since they exceed GitHub's file size limits. Small demo CSVs (`HI-Small_Trans_1000_demo*.csv`) are included.
+> Note: `HI-Small_Trans.csv` (the original ~454MB dataset), `datasets/`, other exploratory `models/run_*`/`outputs/run_*` directories, and top-level model checkpoints (`models/*.pt`, `models/*.pkl`) are excluded from this repo via `.gitignore` since they exceed GitHub's file size limits or are superseded by the tuned run. `models/run_parent_1_150_tuned/` and `outputs/run_parent_1_150_tuned/` **are** included — they're small (~21MB combined) and are what `app.py` loads by default, so the demo UI works out of the box after cloning. Small demo CSVs (`HI-Small_Trans_1000_demo*.csv`) are included too.
 
 ## Setup
 
