@@ -8,7 +8,7 @@ This project follows a complete AML (Anti-Money Laundering) detection workflow:
 2. Feature engineering
 3. Tabular preprocessing
 4. Graph construction
-5. Model training using ANN and GNN
+5. Model training using ANN, LightGBM, and GNN
 6. Ensemble learning with soft voting
 7. Threshold tuning for alert generation
 8. Evaluation using AML-relevant metrics
@@ -91,7 +91,7 @@ Two types of preprocessing are used:
 
 Why this was chosen:
 
-- numeric scaling helps ANN training stability
+- numeric scaling helps ANN training stability; LightGBM doesn't strictly require it, but the shared preprocessor keeps the pipeline and the GNN's transaction-feature inputs consistent
 - feature hashing avoids expensive one-hot encoding on high-cardinality categorical fields
 
 ---
@@ -143,6 +143,25 @@ Output:
 
 - a laundering probability for each transaction
 
+### LightGBM
+
+Implemented in [src/lgbm_model.py](../src/lgbm_model.py).
+
+Purpose:
+
+- learn tabular transaction patterns, as a second model alongside the ANN
+
+Input:
+
+- scaled numeric features
+- hashed categorical features
+
+Output:
+
+- a laundering probability for each transaction
+
+Note: LightGBM was added as a third ensemble member alongside the existing ANN + GNN system, not as a replacement. ANN and LightGBM consume identical input features, so gradient-boosted trees' typically stronger standalone precision on tabular fraud-style data is what lifts the 3-way ensemble, not diversity of inputs.
+
 ### GNN
 
 Implemented in [src/gnn.py](../src/gnn.py).
@@ -174,8 +193,9 @@ The project uses:
 Soft voting means:
 
 - ANN produces probability \(p_{ann}\)
+- LightGBM produces probability \(p_{lgbm}\)
 - GNN produces probability \(p_{gnn}\)
-- final ensemble probability is a weighted combination of both
+- final ensemble probability is a weighted combination of all three
 
 This is better than hard voting for AML because threshold tuning depends on probabilities, not only labels.
 
@@ -352,15 +372,15 @@ Purpose:
 
 ## 3.10 Soft Voting Formula
 
-If ANN weight is \(w_{ann}\) and GNN weight is \(w_{gnn}\):
+If ANN weight is \(w_{ann}\), LightGBM weight is \(w_{lgbm}\), and GNN weight is \(w_{gnn}\):
 
 \[
-p_{ensemble} = \frac{w_{ann} \cdot p_{ann} + w_{gnn} \cdot p_{gnn}}{w_{ann} + w_{gnn}}
+p_{ensemble} = \frac{w_{ann} \cdot p_{ann} + w_{lgbm} \cdot p_{lgbm} + w_{gnn} \cdot p_{gnn}}{w_{ann} + w_{lgbm} + w_{gnn}}
 \]
 
 Purpose:
 
-- combine two model outputs into one ensemble probability
+- combine three model outputs into one ensemble probability, with weights searched on a 3-way simplex grid
 
 ---
 
@@ -438,7 +458,7 @@ For the current presentation-facing system, the methodology is:
 
 1. Use rebalanced training data (`1:10_augmented`)
 2. Evaluate on rebalanced analysis/evaluation parent (`1:150`)
-3. Train ANN and GNN separately
+3. Train ANN, LightGBM, and GNN separately
 4. Combine them through soft voting
 5. Tune threshold for practical precision/recall tradeoff
 6. Present both:
@@ -453,7 +473,7 @@ You can explain the project in this order:
 
 1. “We standardized and cleaned the transaction dataset.”
 2. “We engineered financial, temporal, behavioral, and graph-based features.”
-3. “We trained two models: ANN for tabular behavior and GNN for relational patterns.”
+3. “We trained three models: ANN and LightGBM for tabular behavior, and GNN for relational patterns.”
 4. “We combined their probabilities using soft voting.”
 5. “Because money laundering is rare, we used rebalanced training and threshold tuning.”
 6. “We evaluated using precision, recall, F1, ROC-AUC, and PR-AUC.”
@@ -466,7 +486,7 @@ You can explain the project in this order:
 This project is best described as:
 
 - an AML-oriented machine learning prototype
-- using ANN + GNN + soft voting
+- using ANN + LightGBM + GNN + soft voting
 - with rebalanced training/evaluation strategy
 - and threshold-aware deployment logic
 

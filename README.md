@@ -1,12 +1,13 @@
 # Money-Laundering
 
-AML (Anti-Money Laundering) transaction detection system that combines an ANN, a GNN, and a soft-voting ensemble to flag suspicious transactions in highly imbalanced financial data, with a Streamlit demo UI for live predictions and evaluation.
+AML (Anti-Money Laundering) transaction detection system that combines an ANN, LightGBM, a GNN, and a soft-voting ensemble to flag suspicious transactions in highly imbalanced financial data, with a Streamlit demo UI for live predictions and evaluation.
 
 ## Overview
 
-- **ANN** — learns tabular transaction behavior patterns
+- **ANN** — learns tabular transaction behavior patterns (feed-forward network)
+- **LightGBM** — learns tabular transaction behavior patterns (gradient-boosted trees, added alongside the ANN to improve precision)
 - **GNN** — learns account-to-account network structure
-- **Ensemble** — soft voting over ANN/GNN probabilities with a tuned decision threshold
+- **Ensemble** — soft voting over ANN/LightGBM/GNN probabilities with a tuned decision threshold
 
 The original dataset is extremely imbalanced (~1:980 positive-to-negative), so the project also includes rebalanced training/evaluation datasets and threshold-tuning logic to make recall/precision tradeoffs explicit rather than relying on raw accuracy.
 
@@ -21,8 +22,9 @@ src/
   data_loader.py       dataset loading, standardization, feature engineering, graph construction
   preprocess.py         numeric scaling + categorical hashing
   ann.py                 ANN architecture
-  gnn.py                 GNN architecture
-  ensemble.py             soft voting ensemble + probability transform logic
+  lgbm_model.py           LightGBM model config
+  gnn.py                   GNN architecture
+  ensemble.py               3-way soft voting ensemble + probability transform logic
   train.py                 end-to-end training/evaluation pipeline
   predict.py                batch prediction pipeline
   evaluate.py                 metric calculation
@@ -39,7 +41,7 @@ datasets/             rebalanced training/evaluation datasets (ignored, see belo
 ## Setup
 
 ```powershell
-pip install numpy pandas scikit-learn matplotlib torch streamlit
+pip install numpy pandas scikit-learn matplotlib torch lightgbm streamlit
 ```
 
 ## Usage
@@ -53,7 +55,7 @@ streamlit run app.py
 ### Train
 
 ```powershell
-python main.py train --data datasets/HI-Small_Trans_train_ratio_1_10_augmented.csv --eval-data datasets/HI-Small_Trans_parent_1_150.csv --outputs outputs/run_parent_1_150_tuned --models models/run_parent_1_150_tuned --epochs-ann 6 --epochs-gnn 6 --min-precision 0.08
+python main.py train --data datasets/HI-Small_Trans_train_ratio_1_10_augmented.csv --eval-data datasets/HI-Small_Trans_parent_1_150.csv --outputs outputs/run_parent_1_150_tuned --models models/run_parent_1_150_tuned --epochs-ann 6 --lgbm-rounds 400 --epochs-gnn 6 --min-precision 0.08
 ```
 
 ### Predict

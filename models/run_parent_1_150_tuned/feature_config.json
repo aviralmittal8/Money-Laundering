@@ -22,5 +22,6 @@
     "to_bank"
   ],
   "ann_input_dim": 141,
+  "lgbm_input_dim": 141,
   "hash_dim": 128
 }

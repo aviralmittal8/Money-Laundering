@@ -13,9 +13,11 @@ class ProbabilityTransform:
 @dataclass
 class VotingEnsembleModel:
     ann_weight: float
+    lgbm_weight: float
     gnn_weight: float
     threshold: float
     ann_transform: ProbabilityTransform
+    lgbm_transform: ProbabilityTransform
     gnn_transform: ProbabilityTransform
 
 
@@ -23,11 +25,11 @@ def _to_1d(arr):
     return np.asarray(arr, dtype=np.float64).reshape(-1)
 
 
-def _voting_probs(ann_probs, gnn_probs, ann_weight, gnn_weight):
-    total = ann_weight + gnn_weight
+def _voting_probs(ann_probs, lgbm_probs, gnn_probs, ann_weight, lgbm_weight, gnn_weight):
+    total = ann_weight + lgbm_weight + gnn_weight
     if total <= 0:
-        ann_weight, gnn_weight, total = 0.5, 0.5, 1.0
-    return (ann_weight * ann_probs + gnn_weight * gnn_probs) / total
+        ann_weight, lgbm_weight, gnn_weight, total = 1.0, 1.0, 1.0, 3.0
+    return (ann_weight * ann_probs + lgbm_weight * lgbm_probs + gnn_weight * gnn_probs) / total
 
 
 def _fit_calibrator(probs, y):
@@ -58,17 +60,33 @@ def _apply_transform(transform, probs):
     return _to_1d(transform.calibrator.transform(probs))
 
 
-def train_meta_model(ann_probs, gnn_probs, y, min_precision=0.15):
+def _simplex_weight_grid(step=0.1):
+    # All (a, b, c) with a, b, c on a `step` grid and a + b + c == 1.
+    steps = np.round(np.arange(0.0, 1.0 + 1e-9, step), 2)
+    grid = []
+    for a in steps:
+        for b in steps:
+            c = round(1.0 - a - b, 2)
+            if c < -1e-9 or c > 1.0 + 1e-9:
+                continue
+            grid.append((float(a), float(b), float(max(c, 0.0))))
+    return grid
+
+
+def train_meta_model(ann_probs, lgbm_probs, gnn_probs, y, min_precision=0.15):
     ann_probs = _to_1d(ann_probs)
+    lgbm_probs = _to_1d(lgbm_probs)
     gnn_probs = _to_1d(gnn_probs)
     y = _to_1d(y).astype(int)
 
     ann_transform = _fit_probability_transform(ann_probs, y)
+    lgbm_transform = _fit_probability_transform(lgbm_probs, y)
     gnn_transform = _fit_probability_transform(gnn_probs, y)
     ann_probs_cal = _apply_transform(ann_transform, ann_probs)
+    lgbm_probs_cal = _apply_transform(lgbm_transform, lgbm_probs)
     gnn_probs_cal = _apply_transform(gnn_transform, gnn_probs)
 
-    weight_grid = np.linspace(0.0, 1.0, 21)
+    weight_grid = _simplex_weight_grid(step=0.1)
     precision_floor = float(min_precision)
 
     best_score = -1e12
@@ -76,16 +94,17 @@ def train_meta_model(ann_probs, gnn_probs, y, min_precision=0.15):
     best_precision = -1.0
     best_recall = -1.0
     best_model = VotingEnsembleModel(
-        ann_weight=0.5,
-        gnn_weight=0.5,
+        ann_weight=1 / 3,
+        lgbm_weight=1 / 3,
+        gnn_weight=1 / 3,
         threshold=0.5,
         ann_transform=ann_transform,
+        lgbm_transform=lgbm_transform,
         gnn_transform=gnn_transform,
     )
 
-    for ann_w in weight_grid:
-        gnn_w = 1.0 - ann_w
-        voted = _voting_probs(ann_probs_cal, gnn_probs_cal, ann_w, gnn_w)
+    for ann_w, lgbm_w, gnn_w in weight_grid:
+        voted = _voting_probs(ann_probs_cal, lgbm_probs_cal, gnn_probs_cal, ann_w, lgbm_w, gnn_w)
         voted_max = float(np.max(voted))
         if voted_max <= 0:
             threshold_grid = np.array([0.5], dtype=np.float64)
@@ -95,7 +114,7 @@ def train_meta_model(ann_probs, gnn_probs, y, min_precision=0.15):
             threshold_grid = np.unique(
                 np.concatenate(
                     [
-                        np.linspace(lower, upper, 160, dtype=np.float64),
+                        np.linspace(lower, upper, 80, dtype=np.float64),
                         np.quantile(voted, [0.90, 0.95, 0.99, 0.995, 0.999]).astype(np.float64),
                     ]
                 )
@@ -129,18 +148,22 @@ def train_meta_model(ann_probs, gnn_probs, y, min_precision=0.15):
                 best_recall = float(recall)
                 best_model = VotingEnsembleModel(
                     ann_weight=float(ann_w),
+                    lgbm_weight=float(lgbm_w),
                     gnn_weight=float(gnn_w),
                     threshold=float(thr),
                     ann_transform=ann_transform,
+                    lgbm_transform=lgbm_transform,
                     gnn_transform=gnn_transform,
                 )
 
     print(
         f"Voting ensemble tuned: ann_weight={best_model.ann_weight:.2f}, "
-        f"gnn_weight={best_model.gnn_weight:.2f}, threshold={best_model.threshold:.3f}"
+        f"lgbm_weight={best_model.lgbm_weight:.2f}, gnn_weight={best_model.gnn_weight:.2f}, "
+        f"threshold={best_model.threshold:.3f}"
     )
     print(
         f"Transforms -> ANN: {best_model.ann_transform.method}, "
+        f"LightGBM: {best_model.lgbm_transform.method}, "
         f"GNN: {best_model.gnn_transform.method}"
     )
     print(
@@ -150,9 +173,13 @@ def train_meta_model(ann_probs, gnn_probs, y, min_precision=0.15):
     return best_model
 
 
-def predict_meta(model, ann_probs, gnn_probs):
+def predict_meta(model, ann_probs, lgbm_probs, gnn_probs):
     ann_probs = _to_1d(ann_probs)
+    lgbm_probs = _to_1d(lgbm_probs)
     gnn_probs = _to_1d(gnn_probs)
     ann_probs_cal = _apply_transform(model.ann_transform, ann_probs)
+    lgbm_probs_cal = _apply_transform(model.lgbm_transform, lgbm_probs)
     gnn_probs_cal = _apply_transform(model.gnn_transform, gnn_probs)
-    return _voting_probs(ann_probs_cal, gnn_probs_cal, model.ann_weight, model.gnn_weight)
+    return _voting_probs(
+        ann_probs_cal, lgbm_probs_cal, gnn_probs_cal, model.ann_weight, model.lgbm_weight, model.gnn_weight
+    )

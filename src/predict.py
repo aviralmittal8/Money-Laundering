@@ -35,6 +35,8 @@ def predict_from_file(data_path, models_dir="models"):
         preprocessor = pickle.load(f)
     with open(os.path.join(models_dir, "meta_model.pkl"), "rb") as f:
         meta_model = pickle.load(f)
+    with open(os.path.join(models_dir, "lgbm_model.pkl"), "rb") as f:
+        lgbm_model = pickle.load(f)
 
     X = df[numeric_features + categorical_features]
     X_all_np = preprocessor.transform(X)
@@ -46,6 +48,8 @@ def predict_from_file(data_path, models_dir="models"):
 
     with torch.no_grad():
         ann_probs = torch.sigmoid(ann_model(X_all)).numpy()
+
+    lgbm_probs = lgbm_model.predict_proba(X_all_np)[:, 1]
 
     adjacency, node_features, _, from_idx_np, to_idx_np = build_graph_data(df)
     from_idx = torch.tensor(from_idx_np, dtype=torch.long)
@@ -67,6 +71,6 @@ def predict_from_file(data_path, models_dir="models"):
         gnn_model, node_emb, X_all, from_idx, to_idx, all_idx, batch_size=8192, device=torch.device("cpu")
     )
 
-    probs = predict_meta(meta_model, ann_probs, gnn_probs)
+    probs = predict_meta(meta_model, ann_probs, lgbm_probs, gnn_probs)
     out_df = pd.read_csv(data_path) if data_path.lower().endswith(".csv") else df.copy()
     return out_df, probs

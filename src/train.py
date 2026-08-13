@@ -10,6 +10,7 @@ from sklearn.metrics import precision_recall_curve
 
 from src.data_loader import load_dataset, get_feature_columns, build_graph_data
 from src.ann import ANNModel
+from src.lgbm_model import build_lgbm_model
 from src.gnn import GNNTransactionClassifier
 from src.ensemble import train_meta_model, predict_meta
 from src.evaluate import compute_metrics
@@ -47,13 +48,19 @@ def _threshold_for_target_recall(y_true, y_prob, target_recall):
     return float(thr), float(f1), float(precision_arr[idx]), float(recall_arr[idx])
 
 
+def _train_lgbm(model, X_train, y_train, X_val, y_val):
+    model.fit(X_train, y_train, eval_X=X_val, eval_y=y_val, eval_metric="auc")
+    val_probs = model.predict_proba(X_val)[:, 1]
+    return val_probs
+
+
 def _train_ann(model, train_loader, val_tensor, y_val, epochs, pos_weight, device):
     criterion = torch.nn.BCEWithLogitsLoss(pos_weight=pos_weight.to(device))
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
     model.to(device)
 
     for epoch_num in range(epochs):
-        print(f"\nANN Epoch {epoch_num+1}/{epochs}") # Corrected f-string syntax with double escaped newline
+        print(f"\nANN Epoch {epoch_num+1}/{epochs}")
         total_loss = 0.0
         model.train()
         for xb, yb in train_loader:
@@ -154,6 +161,7 @@ def run_training(
     eval_data_path=None,
     random_state=42,
     epochs_ann=12,
+    lgbm_rounds=400,
     epochs_gnn=8,
     batch_size=1024,
     hash_dim=128,
@@ -204,38 +212,40 @@ def run_training(
     X_train = preprocessor.fit_transform(X_train_df.loc[train_idx])
     X_val = preprocessor.transform(X_eval_df.loc[val_idx])
     X_test = preprocessor.transform(X_eval_df.loc[test_idx])
-    X_train_all = preprocessor.transform(X_train_df)
-    X_eval_all = preprocessor.transform(X_eval_df)
+    X_train_all_np = preprocessor.transform(X_train_df)
+    X_eval_all_np = preprocessor.transform(X_eval_df)
 
-    X_train = torch.tensor(X_train, dtype=torch.float32)
-    X_val = torch.tensor(X_val, dtype=torch.float32)
-    X_test = torch.tensor(X_test, dtype=torch.float32)
-    X_train_all = torch.tensor(X_train_all, dtype=torch.float32)
-    X_eval_all = torch.tensor(X_eval_all, dtype=torch.float32)
+    # ANN training and GNN edge classifier consume these as tensors.
+    X_train_tensor = torch.tensor(X_train, dtype=torch.float32)
+    X_val_tensor = torch.tensor(X_val, dtype=torch.float32)
+    X_test_tensor = torch.tensor(X_test, dtype=torch.float32)
+    X_train_all = torch.tensor(X_train_all_np, dtype=torch.float32)
+    X_eval_all = torch.tensor(X_eval_all_np, dtype=torch.float32)
 
     y_train_tensor = torch.tensor(y_train, dtype=torch.float32)
     y_val_tensor = torch.tensor(y_val, dtype=torch.float32)
-    y_test_tensor = torch.tensor(y_test, dtype=torch.float32)
     y_train_all_tensor = torch.tensor(y_train_all, dtype=torch.float32)
-    y_eval_all_tensor = torch.tensor(y_eval_all, dtype=torch.float32)
 
     pos_weight_value = (y_train == 0).sum() / max((y_train == 1).sum(), 1)
     print(f"Calculated initial pos_weight_value: {pos_weight_value:.2f}")
     # Keep class weighting meaningful for extreme imbalance while avoiding unstable gradients.
     capped_pos_weight_value = min(pos_weight_value, 200.0)
     gnn_pos_weight_value = min(pos_weight_value, 40.0)
-    print(f"Capped pos_weight_value (ANN/ensemble): {capped_pos_weight_value:.2f}")
+    print(f"Capped pos_weight_value (ANN/LightGBM/ensemble): {capped_pos_weight_value:.2f}")
     print(f"Capped pos_weight_value (GNN): {gnn_pos_weight_value:.2f}")
     pos_weight = torch.tensor(capped_pos_weight_value, dtype=torch.float32)
     gnn_pos_weight = torch.tensor(gnn_pos_weight_value, dtype=torch.float32)
 
-    ann_model = ANNModel(X_train.shape[1])
-    ann_loader = DataLoader(
-        TensorDataset(X_train, y_train_tensor), batch_size=batch_size, shuffle=True
-    )
-
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    val_ann_probs = _train_ann(ann_model, ann_loader, X_val, y_val_tensor, epochs_ann, pos_weight, device)
+
+    ann_model = ANNModel(X_train_tensor.shape[1])
+    ann_loader = DataLoader(
+        TensorDataset(X_train_tensor, y_train_tensor), batch_size=batch_size, shuffle=True
+    )
+    val_ann_probs = _train_ann(ann_model, ann_loader, X_val_tensor, y_val_tensor, epochs_ann, pos_weight, device)
+
+    lgbm_model = build_lgbm_model(capped_pos_weight_value, n_estimators=lgbm_rounds, random_state=random_state)
+    val_lgbm_probs = _train_lgbm(lgbm_model, X_train, y_train, X_val, y_val)
 
     train_adjacency, train_node_features, train_account_map, train_from_idx, train_to_idx = build_graph_data(train_df)
     train_from_idx = torch.tensor(train_from_idx, dtype=torch.long)
@@ -283,10 +293,10 @@ def run_training(
             device,
         )
 
-    meta_model = train_meta_model(val_ann_probs, val_gnn_probs, y_val, min_precision=min_precision)
+    meta_model = train_meta_model(val_ann_probs, val_lgbm_probs, val_gnn_probs, y_val, min_precision=min_precision)
 
     # Calculate meta-model probabilities for the validation set
-    val_meta_probs = predict_meta(meta_model, val_ann_probs, val_gnn_probs)
+    val_meta_probs = predict_meta(meta_model, val_ann_probs, val_lgbm_probs, val_gnn_probs)
 
     # Save validation predictions and true labels for threshold optimization
     np.save(os.path.join(outputs_dir, 'y_val.npy'), y_val)
@@ -313,6 +323,9 @@ def run_training(
     ann_optimal_threshold, ann_best_f1, ann_best_precision, ann_best_recall = _best_f1_threshold(
         loaded_y_val, val_ann_probs
     )
+    lgbm_optimal_threshold, lgbm_best_f1, lgbm_best_precision, lgbm_best_recall = _best_f1_threshold(
+        loaded_y_val, val_lgbm_probs
+    )
     gnn_optimal_threshold, gnn_best_f1, gnn_best_precision, gnn_best_recall = _best_f1_threshold(
         loaded_y_val, val_gnn_probs
     )
@@ -324,6 +337,10 @@ def run_training(
     print(
         f"ANN validation threshold={ann_optimal_threshold:.3f} -> "
         f"f1={ann_best_f1:.4f}, recall={ann_best_recall:.4f}, precision={ann_best_precision:.4f}"
+    )
+    print(
+        f"LightGBM validation threshold={lgbm_optimal_threshold:.3f} -> "
+        f"f1={lgbm_best_f1:.4f}, recall={lgbm_best_recall:.4f}, precision={lgbm_best_precision:.4f}"
     )
     print(
         f"GNN validation threshold={gnn_optimal_threshold:.3f} -> "
@@ -341,7 +358,7 @@ def run_training(
     ann_model.eval()
     gnn_model.eval()
     with torch.no_grad():
-        test_ann_logits = ann_model(X_test.to(device))
+        test_ann_logits = ann_model(X_test_tensor.to(device))
         test_ann_probs = torch.sigmoid(test_ann_logits).cpu().numpy()
 
         test_gnn_probs = _predict_gnn_probs_batched(
@@ -354,11 +371,13 @@ def run_training(
             gnn_infer_batch,
             device,
         )
+    test_lgbm_probs = lgbm_model.predict_proba(X_test)[:, 1]
 
-    test_meta_probs = predict_meta(meta_model, test_ann_probs, test_gnn_probs)
+    test_meta_probs = predict_meta(meta_model, test_ann_probs, test_lgbm_probs, test_gnn_probs)
 
     metrics = compute_metrics(y_test, test_meta_probs, threshold=optimal_threshold)
     ann_metrics = compute_metrics(y_test, test_ann_probs, threshold=ann_optimal_threshold)
+    lgbm_metrics = compute_metrics(y_test, test_lgbm_probs, threshold=lgbm_optimal_threshold)
     gnn_metrics = compute_metrics(y_test, test_gnn_probs, threshold=gnn_optimal_threshold)
     metrics_path = os.path.join(outputs_dir, "evaluation_summary.csv")
     with open(metrics_path, "w", encoding="utf-8") as f:
@@ -368,6 +387,7 @@ def run_training(
     pd.DataFrame(
         [
             {"model": "ann", **ann_metrics, "threshold": float(ann_optimal_threshold)},
+            {"model": "lgbm", **lgbm_metrics, "threshold": float(lgbm_optimal_threshold)},
             {"model": "gnn", **gnn_metrics, "threshold": float(gnn_optimal_threshold)},
             {"model": "ensemble", **metrics, "threshold": float(optimal_threshold)},
         ]
@@ -384,6 +404,9 @@ def run_training(
 
     torch.save(ann_model.state_dict(), os.path.join(models_dir, "ann_model.pt"))
     torch.save(gnn_model.state_dict(), os.path.join(models_dir, "gnn_model.pt"))
+
+    with open(os.path.join(models_dir, "lgbm_model.pkl"), "wb") as f:
+        pickle.dump(lgbm_model, f)
 
     with open(os.path.join(models_dir, "preprocessor.pkl"), "wb") as f:
         pickle.dump(preprocessor, f)
@@ -407,6 +430,7 @@ def run_training(
         "numeric_features": numeric_features,
         "categorical_features": categorical_features,
         "ann_input_dim": int(X_train.shape[1]),
+        "lgbm_input_dim": int(X_train.shape[1]),
         "hash_dim": int(hash_dim),
     }
     with open(os.path.join(models_dir, "feature_config.json"), "w", encoding="utf-8") as f:
@@ -429,6 +453,7 @@ def run_training(
         "metrics": metrics,
         "individual_metrics": {
             "ann": ann_metrics,
+            "lgbm": lgbm_metrics,
             "gnn": gnn_metrics,
             "ensemble": metrics,
         },

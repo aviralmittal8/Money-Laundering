@@ -23,7 +23,7 @@ from src.predict import predict_from_file
 
 st.set_page_config(page_title="AML Detection Demo", layout="wide")
 st.title("Money Laundering Detection Demo")
-st.caption("ANN + GNN + Soft Voting Ensemble")
+st.caption("ANN + LightGBM + GNN + Soft Voting Ensemble")
 
 MODELS_DIR = os.path.join("models", "run_parent_1_150_tuned")
 OUTPUTS_DIR = os.path.join("outputs", "run_parent_1_150_tuned")

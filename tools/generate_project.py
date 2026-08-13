@@ -87,7 +87,7 @@ def file_index(files: list[str], root: str) -> list[str]:
     lines.append("Key files:")
     lines.append("- main.py: CLI entrypoint (train/predict)")
     lines.append("- app.py: Streamlit UI (demo + live evaluation)")
-    lines.append("- src/: model + pipeline code (loader, ANN, GNN, ensemble, training)")
+    lines.append("- src/: model + pipeline code (loader, ANN, LightGBM, GNN, ensemble, training)")
     lines.append("- docs/PROJECT_DOCUMENTATION.md: full project reference")
     lines.append("- docs/METHODOLOGY_AND_FORMULAS.md: methodology + formulas")
     lines.append("")

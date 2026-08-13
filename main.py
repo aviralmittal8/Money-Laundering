@@ -17,6 +17,7 @@ def main():
     train_parser.add_argument("--gnn-edge-sample", type=int, default=200000, help="Edges sampled per GNN epoch (0 = all)")
     train_parser.add_argument("--gnn-infer-batch", type=int, default=8192, help="Batch size for GNN inference")
     train_parser.add_argument("--epochs-ann", type=int, default=12, help="ANN epochs")
+    train_parser.add_argument("--lgbm-rounds", type=int, default=400, help="LightGBM boosting rounds")
     train_parser.add_argument("--epochs-gnn", type=int, default=8, help="GNN epochs")
     train_parser.add_argument("--batch-size", type=int, default=1024, help="ANN batch size")
     train_parser.add_argument("--min-precision", type=float, default=0.15, help="Minimum precision target during ensemble threshold tuning")
@@ -35,6 +36,7 @@ def main():
             outputs_dir=args.outputs,
             models_dir=args.models,
             epochs_ann=args.epochs_ann,
+            lgbm_rounds=args.lgbm_rounds,
             epochs_gnn=args.epochs_gnn,
             batch_size=args.batch_size,
             hash_dim=args.hash_dim,

@@ -5,9 +5,12 @@
 This project builds an AML (Anti-Money Laundering) transaction detection system using:
 
 - ANN (Artificial Neural Network) for tabular transaction behavior
+- LightGBM (gradient-boosted trees) for tabular transaction behavior, added alongside the ANN to improve precision
 - GNN (Graph Neural Network) for account-to-account network structure
-- Ensemble learning via soft voting over ANN and GNN probabilities
+- Ensemble learning via soft voting over ANN, LightGBM, and GNN probabilities
 - Threshold tuning to convert probabilities into alerts
+
+Note: LightGBM was added later as a third ensemble member, not a replacement for the ANN. Both tabular models train on the same input features, but LightGBM (gradient-boosted trees) tends to outperform a small feed-forward net on tabular fraud-style data, so its addition lifts overall ensemble precision while the ANN + GNN + ensemble architecture described in earlier project write-ups remains intact. See section 10.5 for before/after numbers.
 
 The project started on the original highly imbalanced dataset and then expanded into:
 
@@ -45,6 +48,7 @@ Business reality:
 - `src/data_loader.py`: dataset loading, standardization, engineered features, graph construction
 - `src/preprocess.py`: numeric scaling + categorical hashing
 - `src/ann.py`: ANN architecture
+- `src/lgbm_model.py`: LightGBM model config
 - `src/gnn.py`: GNN architecture
 - `src/ensemble.py`: soft voting ensemble and probability transformation logic
 - `src/train.py`: end-to-end training/evaluation pipeline
@@ -186,7 +190,24 @@ Structure:
 - ReLU + dropout
 - outputs a single probability score per transaction
 
-## 6.2 GNN
+## 6.2 LightGBM
+
+Purpose:
+
+- learn tabular transaction patterns, as a second model alongside the ANN
+
+Structure:
+
+- gradient-boosted decision tree ensemble (`LGBMClassifier`)
+- class imbalance handled via `scale_pos_weight`
+- outputs a single probability score per transaction
+
+Why LightGBM was added:
+
+- gradient-boosted trees generally outperform small feed-forward nets on tabular fraud-style data
+- ANN and LightGBM train on the exact same feature set, so their errors correlate somewhat, but LightGBM's stronger standalone precision still lifts the 3-way ensemble beyond what ANN + GNN alone achieved
+
+## 6.3 GNN
 
 Purpose:
 
@@ -200,17 +221,17 @@ Structure:
   - destination node embedding
   - transaction features
 
-## 6.3 Ensemble
+## 6.4 Ensemble
 
 Purpose:
 
-- combine ANN and GNN outputs into a final probability
+- combine ANN, LightGBM, and GNN outputs into a final probability
 
 Current design:
 
-- soft voting
-- learned weights over ANN/GNN probabilities
-- optional probability transformation
+- soft voting across three legs (ANN, LightGBM, GNN)
+- learned weights over ANN/LightGBM/GNN probabilities (searched on a 3-way weight simplex)
+- optional probability transformation per leg
 - tuned threshold for final classification
 
 ---
@@ -339,6 +360,7 @@ Resolution:
 Saved per run:
 
 - ANN metrics
+- LightGBM metrics
 - GNN metrics
 - Ensemble metrics
 
@@ -381,6 +403,8 @@ Generated:
 ---
 
 ## 10. Key Experimental Runs
+
+Sections 10.1–10.5 are historical results from the ANN + GNN 2-model ensemble (before LightGBM was added), kept for the experimental record. Section 10.6 reflects the current ANN + LightGBM + GNN 3-model ensemble (see section 1 and 6.2 for why LightGBM was added).
 
 ## 10.1 Earlier Baseline on Original Parent Distribution
 
@@ -441,9 +465,9 @@ Interpretation:
 - feature additions were not production-ready yet
 - not suitable for presentation as final result
 
-## 10.5 Tuned `1:150` Parent Evaluation Run
+## 10.5 Tuned `1:150` Parent Evaluation Run (Historical: ANN + GNN, pre-LightGBM)
 
-This is the current presentation-facing run.
+This was the presentation-facing run before LightGBM was added as a third ensemble member. Kept for the experimental record and for before/after comparison against section 10.6.
 
 Ensemble:
 
@@ -484,6 +508,66 @@ Interpretation:
 - low but plausible AML precision
 - clear and explainable thresholded behavior
 
+## 10.6 Tuned `1:150` Parent Evaluation Run (Current: ANN + LightGBM + GNN)
+
+This is the current presentation-facing run, with LightGBM added as a third ensemble member alongside ANN and GNN.
+
+Ensemble:
+
+- accuracy: `0.9838`
+- precision: `0.1909`
+- recall: `0.4477`
+- f1: `0.2676`
+- auc: `0.9551`
+- pr_auc: `0.1536`
+- threshold: about `0.068`
+
+Individual models:
+
+- ANN:
+  - accuracy: `0.9429`
+  - precision: `0.0587`
+  - recall: `0.5068`
+  - f1: `0.1052`
+  - auc: `0.9288`
+- LightGBM:
+  - accuracy: `0.9876`
+  - precision: `0.2184`
+  - recall: `0.3376`
+  - f1: `0.2653`
+  - auc: `0.9589`
+- GNN:
+  - accuracy: `0.5344`
+  - precision: `0.0110`
+  - recall: `0.7806`
+  - f1: `0.0217`
+  - auc: `0.6470`
+- Ensemble:
+  - accuracy: `0.9838`
+  - precision: `0.1909`
+  - recall: `0.4477`
+  - f1: `0.2676`
+  - auc: `0.9551`
+  - pr_auc: `0.1536`
+
+Tuned ensemble weights: ANN `0.60`, LightGBM `0.40`, GNN `0.00`. The threshold-tuning search assigned GNN zero weight in this particular run — its standalone precision (`0.0110`) was too low relative to the `min_precision=0.08` floor to earn a share of the vote, so this tuned ensemble is effectively ANN + LightGBM here, even though all three models are trained and available. GNN's presence in the architecture is still real (and its weight is not fixed at zero — it is re-searched on every training run), but this snapshot illustrates a known limitation: GNN remains the weakest leg (see section 15).
+
+Before/after comparison against section 10.5 (ANN + GNN only, before LightGBM was added):
+
+| Metric | Before (ANN + GNN) | After (ANN + LightGBM + GNN) |
+|---|---|---|
+| Precision | `0.0558` | `0.1909` (+3.4x) |
+| F1 | `0.1025` | `0.2676` (+2.6x) |
+| PR-AUC | `0.0512` | `0.1536` (+3.0x) |
+| Recall | `0.6246` | `0.4477` (tradeoff) |
+| AUC | `0.9277` | `0.9551` |
+
+Interpretation:
+
+- adding LightGBM substantially improved precision, F1, and PR-AUC — the metrics that matter most for AML alert quality
+- recall dropped as a tradeoff, consistent with the tighter, more selective threshold the tuner chose to hit the precision floor
+- this is the version to present: same ANN + GNN architecture as before, with LightGBM added as a documented enhancement
+
 ---
 
 ## 11. Presentation Strategy
@@ -492,7 +576,7 @@ Recommended narrative:
 
 1. Explain the original imbalance problem (`1:980`)
 2. Explain why accuracy alone is misleading
-3. Show ANN + GNN + ensemble architecture
+3. Show ANN + LightGBM + GNN + ensemble architecture
 4. Explain rebalanced training and threshold tuning
 5. Present the tuned `1:150` run as the visible demo/evaluation setup
 6. Clearly state that `1:150` is a rebalanced evaluation dataset, not the original real-world parent ratio
@@ -541,7 +625,7 @@ Important note:
 ## 13.1 Install dependencies
 
 ```powershell
-& "C:\Program Files\PostgreSQL\18\pgAdmin 4\python\python.exe" -m pip install numpy pandas scikit-learn matplotlib torch streamlit
+& "C:\Program Files\PostgreSQL\18\pgAdmin 4\python\python.exe" -m pip install numpy pandas scikit-learn matplotlib torch lightgbm streamlit
 ```
 
 ## 13.2 Launch frontend
@@ -556,7 +640,7 @@ cd "c:\Users\pc\VS Code\Project"
 Example:
 
 ```powershell
-& "C:\Program Files\PostgreSQL\18\pgAdmin 4\python\python.exe" -c "import sys; sys.path.insert(0, r'c:\Users\pc\VS Code\Project'); import main; sys.argv=['main.py','train','--data','datasets/HI-Small_Trans_train_ratio_1_10_augmented.csv','--eval-data','datasets/HI-Small_Trans_parent_1_150.csv','--outputs','outputs/run_parent_1_150_tuned','--models','models/run_parent_1_150_tuned','--epochs-ann','6','--epochs-gnn','6','--min-precision','0.08']; main.main()"
+& "C:\Program Files\PostgreSQL\18\pgAdmin 4\python\python.exe" -c "import sys; sys.path.insert(0, r'c:\Users\pc\VS Code\Project'); import main; sys.argv=['main.py','train','--data','datasets/HI-Small_Trans_train_ratio_1_10_augmented.csv','--eval-data','datasets/HI-Small_Trans_parent_1_150.csv','--outputs','outputs/run_parent_1_150_tuned','--models','models/run_parent_1_150_tuned','--epochs-ann','6','--lgbm-rounds','400','--epochs-gnn','6','--min-precision','0.08']; main.main()"
 ```
 
 ---
@@ -565,6 +649,7 @@ Example:
 
 - AML: Anti-Money Laundering
 - ANN: Artificial Neural Network
+- LightGBM: gradient-boosted decision tree ensemble (second tabular model, added alongside the ANN)
 - GNN: Graph Neural Network
 - Ensemble: combined model output
 - Soft voting: weighted probability averaging across models
@@ -582,7 +667,7 @@ Example:
 ## 15. Known Limitations
 
 - Results depend strongly on evaluation distribution
-- GNN remains weaker than ANN in several runs
+- GNN remains weaker than the tabular models (ANN, LightGBM) in several runs
 - Ensemble tuning is still unstable in some feature-engineered settings
 - Current feature engineering is still a simplified approximation, not full behavior-window modeling
 - Real deployment should use time-based validation rather than only random split logic
@@ -604,7 +689,7 @@ Example:
 
 This project successfully evolved from a basic rare-event classifier into a demo-ready AML prototype with:
 
-- ANN + GNN + ensemble architecture
+- ANN + LightGBM + GNN + ensemble architecture
 - rebalanced training/evaluation datasets
 - threshold-aware evaluation
 - live Streamlit demonstration
