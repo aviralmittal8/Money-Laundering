@@ -21,7 +21,7 @@ The goal is not only to classify transactions, but to convert model outputs into
 
 ## 2.1 Data Ingestion And Normalization
 
-The raw transaction CSV is loaded and standardized in [src/data_loader.py](c:\Users\pc\VS Code\Project\src\data_loader.py).
+The raw transaction CSV is loaded and standardized in [src/data_loader.py](src/data_loader.py).
 
 Fields are normalized into a common schema:
 
@@ -82,7 +82,7 @@ These were designed as cumulative/account-history features so they could scale t
 
 ## 2.4 Preprocessing
 
-Implemented in [src/preprocess.py](c:\Users\pc\VS Code\Project\src\preprocess.py).
+Implemented in [src/preprocess.py](src/preprocess.py).
 
 Two types of preprocessing are used:
 
@@ -98,7 +98,7 @@ Why this was chosen:
 
 ## 2.5 Graph Construction
 
-Implemented in [src/data_loader.py](c:\Users\pc\VS Code\Project\src\data_loader.py).
+Implemented in [src/data_loader.py](src/data_loader.py).
 
 Graph logic:
 
@@ -128,7 +128,7 @@ Why graph modeling is useful:
 
 ### ANN
 
-Implemented in [src/ann.py](c:\Users\pc\VS Code\Project\src\ann.py).
+Implemented in [src/ann.py](src/ann.py).
 
 Purpose:
 
@@ -145,7 +145,7 @@ Output:
 
 ### GNN
 
-Implemented in [src/gnn.py](c:\Users\pc\VS Code\Project\src\gnn.py).
+Implemented in [src/gnn.py](src/gnn.py).
 
 Purpose:
 
@@ -165,7 +165,7 @@ Output:
 
 ## 2.7 Ensemble Learning
 
-Implemented in [src/ensemble.py](c:\Users\pc\VS Code\Project\src\ensemble.py).
+Implemented in [src/ensemble.py](src/ensemble.py).
 
 The project uses:
 
@@ -183,7 +183,7 @@ This is better than hard voting for AML because threshold tuning depends on prob
 
 ## 2.8 Threshold Tuning
 
-Implemented in [src/train.py](c:\Users\pc\VS Code\Project\src\train.py).
+Implemented in [src/train.py](src/train.py).
 
 Instead of using the default threshold `0.5`, the project tunes thresholds on validation data.
 
@@ -199,7 +199,7 @@ This is one of the most important methodological decisions in the project.
 
 ## 2.9 Evaluation
 
-Implemented in [src/evaluate.py](c:\Users\pc\VS Code\Project\src\evaluate.py).
+Implemented in [src/evaluate.py](src/evaluate.py).
 
 Evaluation metrics:
 
