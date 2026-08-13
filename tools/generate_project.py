@@ -88,8 +88,8 @@ def file_index(files: list[str], root: str) -> list[str]:
     lines.append("- main.py: CLI entrypoint (train/predict)")
     lines.append("- app.py: Streamlit UI (demo + live evaluation)")
     lines.append("- src/: model + pipeline code (loader, ANN, GNN, ensemble, training)")
-    lines.append("- PROJECT_DOCUMENTATION.md: full project reference")
-    lines.append("- METHODOLOGY_AND_FORMULAS.md: methodology + formulas")
+    lines.append("- docs/PROJECT_DOCUMENTATION.md: full project reference")
+    lines.append("- docs/METHODOLOGY_AND_FORMULAS.md: methodology + formulas")
     lines.append("")
     lines.append("Included source files in this document:")
     for p in files:
@@ -108,7 +108,7 @@ def build_document_xml(root: str) -> str:
     parts.append(w_p("- Full project source code (Python + Markdown)"))
 
     # Chapter 4 draft: use existing file if present, otherwise skip.
-    chapter_file = os.path.join(root, "DATASETS_AND_PREPROCESSING.md")
+    chapter_file = os.path.join(root, "docs", "DATASETS_AND_PREPROCESSING.md")
     if os.path.exists(chapter_file):
         parts.append(section_heading("Chapter 4: Datasets, Preprocessing and Experimental Setup", 1))
         for line in read_text(chapter_file).splitlines():
