@@ -10,7 +10,7 @@ AML (Anti-Money Laundering) transaction detection system that combines an ANN, a
 
 The original dataset is extremely imbalanced (~1:980 positive-to-negative), so the project also includes rebalanced training/evaluation datasets and threshold-tuning logic to make recall/precision tradeoffs explicit rather than relying on raw accuracy.
 
-See [`PROJECT_DOCUMENTATION.md`](PROJECT_DOCUMENTATION.md) for the full writeup (datasets, feature engineering, model design, experimental runs, known issues), and [`METHODOLOGY_AND_FORMULAS.md`](METHODOLOGY_AND_FORMULAS.md) / [`DATASETS_AND_PREPROCESSING.md`](DATASETS_AND_PREPROCESSING.md) for methodology details.
+See [`docs/PROJECT_DOCUMENTATION.md`](docs/PROJECT_DOCUMENTATION.md) for the full writeup (datasets, feature engineering, model design, experimental runs, known issues), and [`docs/METHODOLOGY_AND_FORMULAS.md`](docs/METHODOLOGY_AND_FORMULAS.md) / [`docs/DATASETS_AND_PREPROCESSING.md`](docs/DATASETS_AND_PREPROCESSING.md) for methodology details.
 
 ## Repository structure
 
@@ -68,4 +68,10 @@ Because this is a rare-event classification problem, accuracy alone is misleadin
 
 ## Status
 
-Demo/research prototype. See section "Known Limitations" in [`PROJECT_DOCUMENTATION.md`](PROJECT_DOCUMENTATION.md) for what's not yet production-ready.
+Demo/research prototype. See section "Known Limitations" in [`docs/PROJECT_DOCUMENTATION.md`](docs/PROJECT_DOCUMENTATION.md) for what's not yet production-ready.
+
+## Docs
+
+- [`docs/PROJECT_DOCUMENTATION.md`](docs/PROJECT_DOCUMENTATION.md) — full project writeup
+- [`docs/METHODOLOGY_AND_FORMULAS.md`](docs/METHODOLOGY_AND_FORMULAS.md) — methodology and formulas
+- [`docs/DATASETS_AND_PREPROCESSING.md`](docs/DATASETS_AND_PREPROCESSING.md) — dataset and preprocessing details

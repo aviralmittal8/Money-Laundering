@@ -56,7 +56,7 @@ Important: these are rebalanced evaluation datasets for analysis/presentation pu
 
 ## 5. Preprocessing Pipeline
 
-Implemented in [`src/data_loader.py`](src/data_loader.py) and [`src/preprocess.py`](src/preprocess.py).
+Implemented in [`src/data_loader.py`](../src/data_loader.py) and [`src/preprocess.py`](../src/preprocess.py).
 
 ### 5.1 Column Normalization
 
@@ -117,7 +117,7 @@ Nodes are `bank:account` identifiers, edges are directed transactions. Node feat
 
 ### 5.5 Numeric And Categorical Encoding
 
-Implemented in [`src/preprocess.py`](src/preprocess.py):
+Implemented in [`src/preprocess.py`](../src/preprocess.py):
 
 - numeric features are scaled using `StandardScaler`
 - categorical features are encoded using `FeatureHasher` (avoids expensive one-hot encoding on high-cardinality fields such as bank/account identifiers)
