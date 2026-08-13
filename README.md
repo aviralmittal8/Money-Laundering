@@ -1,1 +1,69 @@
 # Money-Laundering
+
+AML (Anti-Money Laundering) transaction detection system that combines an ANN, a GNN, and a soft-voting ensemble to flag suspicious transactions in highly imbalanced financial data, with a Streamlit demo UI for live predictions and evaluation.
+
+## Overview
+
+- **ANN** — learns tabular transaction behavior patterns
+- **GNN** — learns account-to-account network structure
+- **Ensemble** — soft voting over ANN/GNN probabilities with a tuned decision threshold
+
+The original dataset is extremely imbalanced (~1:980 positive-to-negative), so the project also includes rebalanced training/evaluation datasets and threshold-tuning logic to make recall/precision tradeoffs explicit rather than relying on raw accuracy.
+
+See [`PROJECT_DOCUMENTATION.md`](PROJECT_DOCUMENTATION.md) for the full writeup (datasets, feature engineering, model design, experimental runs, known issues), and [`METHODOLOGY_AND_FORMULAS.md`](METHODOLOGY_AND_FORMULAS.md) / [`DATASETS_AND_PREPROCESSING.md`](DATASETS_AND_PREPROCESSING.md) for methodology details.
+
+## Repository structure
+
+```
+main.py              CLI entrypoint for training and prediction
+app.py                Streamlit frontend
+src/
+  data_loader.py       dataset loading, standardization, feature engineering, graph construction
+  preprocess.py         numeric scaling + categorical hashing
+  ann.py                 ANN architecture
+  gnn.py                 GNN architecture
+  ensemble.py             soft voting ensemble + probability transform logic
+  train.py                 end-to-end training/evaluation pipeline
+  predict.py                batch prediction pipeline
+  evaluate.py                 metric calculation
+  plots.py                     ROC/PR/confusion matrix plot generation
+models/               trained model artifacts (large files ignored, see below)
+outputs/              metrics, plots, threshold files
+datasets/             rebalanced training/evaluation datasets (ignored, see below)
+```
+
+> Note: `HI-Small_Trans.csv` (the original ~454MB dataset), `datasets/`, large model checkpoints (`models/*.pt`, `models/*.pkl`, `models/run_*`), and per-run outputs (`outputs/run_*`, `.npy` files) are excluded from this repo via `.gitignore` since they exceed GitHub's file size limits. Small demo CSVs (`HI-Small_Trans_1000_demo*.csv`) are included.
+
+## Setup
+
+```powershell
+pip install numpy pandas scikit-learn matplotlib torch streamlit
+```
+
+## Usage
+
+### Launch the demo UI
+
+```powershell
+streamlit run app.py
+```
+
+### Train
+
+```powershell
+python main.py train --data datasets/HI-Small_Trans_train_ratio_1_10_augmented.csv --eval-data datasets/HI-Small_Trans_parent_1_150.csv --outputs outputs/run_parent_1_150_tuned --models models/run_parent_1_150_tuned --epochs-ann 6 --epochs-gnn 6 --min-precision 0.08
+```
+
+### Predict
+
+```powershell
+python main.py predict --data path/to/file.csv --models models/run_parent_1_150_tuned
+```
+
+## Metrics
+
+Because this is a rare-event classification problem, accuracy alone is misleading. The project reports precision, recall, F1, ROC-AUC, and PR-AUC, and uses a tuned decision threshold rather than the default `0.5`.
+
+## Status
+
+Demo/research prototype. See section "Known Limitations" in [`PROJECT_DOCUMENTATION.md`](PROJECT_DOCUMENTATION.md) for what's not yet production-ready.
